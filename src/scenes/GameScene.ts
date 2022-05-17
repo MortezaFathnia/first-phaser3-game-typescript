@@ -1,48 +1,75 @@
 import Phaser from 'phaser'
+import ScoreLabel from "../ui/ScoreLabel";
+import BombSpawner from "./BombSpawner";
 
-export default class HelloWorldScene extends Phaser.Scene {
+const GROUND_KEY = 'ground';
+const DUDE_KEY = 'dude';
+const STAR_KEY = 'star';
+const BOMB_KEY = 'bomb';
+
+export default class GameScene extends Phaser.Scene {
     private platforms?: Phaser.Physics.Arcade.StaticGroup;
     private player?: Phaser.Physics.Arcade.Sprite;
     private cursors?: Phaser.Types.Input.Keyboard.CursorKeys;
     private stars?: Phaser.Physics.Arcade.Group;
 
-    private score = 0;
-    private scoreText?: Phaser.GameObjects.Text;
 
-    private bombs?: Phaser.Physics.Arcade.Group;
+    private scoreLabel?: ScoreLabel;
+
+    private bombSpawner?: BombSpawner;
 
     private gameOver = false;
 
     constructor() {
-        super('hello-world')
+        super('game-scene');
     }
 
     preload() {
         this.load.image('sky', 'assets/sky.png');
-        this.load.image('ground', 'assets/platform.png');
-        this.load.image('star', 'assets/star.png');
-        this.load.image('bomb', 'assets/bomb.png');
+        this.load.image(GROUND_KEY, 'assets/platform.png');
+        this.load.image(STAR_KEY, 'assets/star.png');
+        this.load.image(BOMB_KEY, 'assets/bomb.png');
 
-        this.load.spritesheet('dude', 'assets/dude.png', { frameWidth: 32, frameHeight: 48 })
+        this.load.spritesheet(DUDE_KEY, 'assets/dude.png', { frameWidth: 32, frameHeight: 48 })
     }
 
     create() {
         this.add.image(400, 300, 'sky');
-        this.platforms = this.physics.add.staticGroup();
-        const ground = this.platforms.create(400, 568, 'ground') as Phaser.Physics.Arcade.Sprite;
+        this.platforms = this.createPlatforms();
+        this.player = this.createPlayer();
+        this.stars = this.createStars();
+        this.scoreLabel = this.createScoreLabel(16, 16, 0);
+        this.bombSpawner = new BombSpawner(this, BOMB_KEY)
+		const bombsGroup = this.bombSpawner.group;
+
+        this.physics.add.collider(this.player, this.platforms);
+        this.physics.add.collider(this.stars, this.platforms);
+        this.physics.add.overlap(this.player, this.stars, this.handleCollectStar, undefined, this);
+        this.physics.add.collider(bombsGroup, this.platforms);
+        this.physics.add.collider(this.player, bombsGroup, this.handleHitBomb, undefined, this);
+
+        this.cursors = this.input.keyboard.createCursorKeys();
+    }
+
+    private createPlatforms() {
+        const platforms = this.physics.add.staticGroup();
+        const ground = platforms.create(400, 568, GROUND_KEY) as Phaser.Physics.Arcade.Sprite;
         ground.setScale(2).refreshBody();
 
-        this.platforms.create(600, 400, 'ground');
-        this.platforms.create(50, 250, 'ground');
-        this.platforms.create(750, 220, 'ground');
+        platforms.create(600, 400, GROUND_KEY);
+        platforms.create(50, 250, GROUND_KEY);
+        platforms.create(750, 220, GROUND_KEY);
+        return platforms;
+    }
 
-        this.player = this.physics.add.sprite(100, 450, 'dude');
-        this.player.setBounce(0.2);
-        this.player.setCollideWorldBounds(true);
+    private createPlayer() {
+        const player = this.physics.add.sprite(100, 450, DUDE_KEY);
+        player.setBounce(0.2);
+        player.setCollideWorldBounds(true);
 
         this.anims.create({
             key: 'left',
-            frames: this.anims.generateFrameNumbers('dude', {
+            frames: this.anims.generateFrameNumbers(DUDE_KEY, {
                 start: 0, end: 3
             }),
             frameRate: 10,
@@ -51,59 +78,45 @@ export default class HelloWorldScene extends Phaser.Scene {
 
         this.anims.create({
             key: 'turn',
-            frames: [{ key: 'dude', frame: 4 }],
+            frames: [{ key: DUDE_KEY, frame: 4 }],
             frameRate: 20
         });
 
         this.anims.create({
             key: 'right',
-            frames: this.anims.generateFrameNumbers('dude', {
+            frames: this.anims.generateFrameNumbers(DUDE_KEY, {
                 start: 5, end: 8
             }),
             frameRate: 10,
             repeat: -1
         });
 
-        this.physics.add.collider(this.player, this.platforms);
+        return player;
+    }
 
-        this.cursors = this.input.keyboard.createCursorKeys();
-
-        this.stars = this.physics.add.group({
-            key: 'star',
+    private createStars() {
+        const stars = this.physics.add.group({
+            key: STAR_KEY,
             repeat: 11,
             setXY: { x: 12, y: 0, stepX: 70 }
         });
 
-        this.stars.children.iterate((c) => {
+        stars.children.iterate((c) => {
             const child = c as Phaser.Physics.Arcade.Image;
 
             child.setBounceY(Phaser.Math.FloatBetween(0.4, 0.8))
         });
 
-        this.physics.add.collider(this.stars, this.platforms);
-        this.physics.add.overlap(this.player, this.stars, this.handleCollectStar, undefined, this);
-
-        this.scoreText = this.add.text(16, 16, 'score: 0', {
-            fontSize: '32px',
-            color: '#000'
-        })
-
-        this.bombs = this.physics.add.group();
-
-        this.physics.add.collider(this.bombs, this.platforms);
-
-        this.physics.add.collider(this.player, this.bombs, this.handleHitBomb, undefined, this);
-    }
-    private createPlatforms(){
-
+        return stars;
     }
 
-    private createPlayer(){
+    createScoreLabel(x: number, y: number, score: number) {
+        const style = { fontSize: '32px', fill: '#000' }
+        const label = new ScoreLabel(this, x, y, score, style);
 
-    }
+        this.add.existing(label);
 
-    private createStars(){
-
+        return label;
     }
 
     private handleHitBomb(player: Phaser.GameObjects.GameObject, b: Phaser.GameObjects.GameObject) {
@@ -119,23 +132,16 @@ export default class HelloWorldScene extends Phaser.Scene {
         const star = s as Phaser.Physics.Arcade.Image;
         star.disableBody(true, true);
 
-        this.score += 10;
-        this.scoreText?.setText(`Score: ${this.score}`);
-     
+        this.scoreLabel?.add(10);
+
         if (this.stars?.countActive(true) === 0) {
             this.stars.children.iterate(c => {
                 const child = c as Phaser.Physics.Arcade.Image;
                 child.enableBody(true, child.x, 0, true, true);
             });
-            console.log(134)
-
         }
         if (this.player) {
-            const x = (this.player.x < 400) ? Phaser.Math.Between(400, 800) : Phaser.Math.Between(0, 400);
-            const bomb: Phaser.Physics.Arcade.Image = this.bombs?.create(x, 16, 'bomb');
-            bomb.setBounce(1);
-            bomb.setCollideWorldBounds(true);
-            bomb.setVelocity(Phaser.Math.Between(-200, 200), 20);
+            this.bombSpawner?.Spawn(this.player.x)
         }
     }
 

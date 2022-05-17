@@ -1,6 +1,6 @@
 import Phaser from 'phaser'
 
-import HelloWorldScene from './scenes/GameScene'
+import GameScene from './scenes/GameScene'
 
 const config: Phaser.Types.Core.GameConfig = {
 	type: Phaser.AUTO,
@@ -13,7 +13,7 @@ const config: Phaser.Types.Core.GameConfig = {
 			debug: false
 		}
 	},
-	scene: [HelloWorldScene]
+	scene: [GameScene]
 }
 
 export default new Phaser.Game(config)
